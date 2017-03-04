@@ -1,6 +1,6 @@
 {
   "name": "broccoli-static-asset-rev",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Provides broccoli-statically updated file hashes for cache busting",
   "main": "index.js",
   "engines": {
