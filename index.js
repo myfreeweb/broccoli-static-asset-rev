@@ -1,7 +1,7 @@
 var Plugin = require('broccoli-plugin')
 var RSVP = require('rsvp')
+var Async = require('async')
 var fs = require('fs')
-var es = require('event-stream')
 var path = require('path')
 var hash = require('rev-hash')
 var readdirp = require('readdirp')
@@ -22,22 +22,27 @@ StaticAssetRev.prototype.build = function () {
 	var options = this.options
 	var hashes = { }
 	return RSVP.all(this.inputPaths.map(function (inpath) {
+		var queue = Async.queue(function (entry, cb) {
+			fs.readFile(entry.fullPath, function (err, data) {
+				if (!err) {
+					hashes[entry.path.replace(/..\/out[^\/]+\//, '')] = hash(data)
+					cb()
+				}
+			})
+		}, 1)
+		var opts = Object.create(options.chokidar)
+		opts.root = inpath
 		return new RSVP.Promise(function (resolve, reject) {
-			options.chokidar.root = inpath
-			readdirp(options.chokidar)
-				.on('data', function (entry) {
-					fs.readFile(entry.fullPath, function (err, data) {
-						if (!err) {
-							hashes[entry.path.replace(/..\/out[^\/]+\//, '')] = hash(data)
-						}
-					})
-				})
+			readdirp(opts)
+				.on('data', queue.push)
 				.on('end', function () {
-					fs.writeFileSync(path.join(outputPath, 'assets.json'), JSON.stringify(hashes));
-					resolve(null)
+					queue.drain = resolve
 				})
+				.on('error', reject)
 		})
-	}))
+	})).then(function () {
+		fs.writeFileSync(path.join(outputPath, 'assets.json'), JSON.stringify(hashes));
+	})
 }
 
 module.exports = StaticAssetRev
